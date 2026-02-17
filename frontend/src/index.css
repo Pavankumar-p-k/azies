@@ -1,0 +1,70 @@
+@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: "Orbitron", "Segoe UI", sans-serif;
+  --font-body: "Space Grotesk", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: #06110d;
+  color: #f6f8f7;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+}
+
+.aurora {
+  pointer-events: none;
+  position: absolute;
+  inset: -30% -10% auto -10%;
+  height: 520px;
+  background:
+    radial-gradient(circle at 20% 35%, rgba(67, 244, 167, 0.23), transparent 52%),
+    radial-gradient(circle at 78% 22%, rgba(20, 184, 166, 0.2), transparent 47%),
+    radial-gradient(circle at 50% 15%, rgba(35, 120, 95, 0.3), transparent 58%);
+  filter: blur(35px);
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-emerald-300/20 bg-terminal-elev/80 p-5 shadow-panel backdrop-blur-sm;
+  }
+
+  .panel-title {
+    @apply text-xs uppercase tracking-[0.22em] text-zinc-400;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-300/30 bg-neon-green/90 px-3 py-2 text-xs font-semibold text-zinc-900 transition hover:shadow-neon disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-neon-green/70 hover:text-neon-green disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none ring-offset-0 placeholder:text-zinc-500 focus:border-neon-green;
+  }
+
+  .dropzone {
+    @apply flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/60 px-4 py-10 transition hover:border-neon-green/80;
+  }
+
+  .dropzone-active {
+    @apply border-neon-green shadow-neon;
+  }
+}
