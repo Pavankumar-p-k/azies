@@ -3,17 +3,29 @@ import { Shield, TerminalSquare } from "lucide-react";
 
 import AuthPanel from "./components/AuthPanel";
 import LiveFeed from "./components/LiveFeed";
+import NotificationsPanel from "./components/NotificationsPanel";
+import ProfilePanel from "./components/ProfilePanel";
 import ProofTable from "./components/ProofTable";
+import SharedVerifyPanel from "./components/SharedVerifyPanel";
 import UploadPanel from "./components/UploadPanel";
 import { useProofSocket } from "./hooks/useProofSocket";
 import { healthCheck, listProofs } from "./lib/api";
 import { isSupabaseEnabled, supabase } from "./lib/supabase";
+
+function readShareToken() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  const value = new URLSearchParams(window.location.search).get("share");
+  return value ? value.trim() : "";
+}
 
 export default function App() {
   const [health, setHealth] = useState(null);
   const [proofs, setProofs] = useState([]);
   const [user, setUser] = useState(null);
   const [error, setError] = useState("");
+  const [shareToken, setShareToken] = useState(readShareToken);
   const { socketState, events } = useProofSocket();
 
   async function loadHealth() {
@@ -37,6 +49,14 @@ export default function App() {
   useEffect(() => {
     loadHealth();
     loadProofs();
+  }, []);
+
+  useEffect(() => {
+    const syncShareToken = () => setShareToken(readShareToken());
+    window.addEventListener("popstate", syncShareToken);
+    return () => {
+      window.removeEventListener("popstate", syncShareToken);
+    };
   }, []);
 
   useEffect(() => {
@@ -75,6 +95,44 @@ export default function App() {
     return `Engine: ${pqc} via ${backend}`;
   }, [health]);
 
+  function clearShareMode() {
+    if (typeof window === "undefined") {
+      setShareToken("");
+      return;
+    }
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete("share");
+    const query = nextUrl.searchParams.toString();
+    const relative = `${nextUrl.pathname}${query ? `?${query}` : ""}${nextUrl.hash}`;
+    window.history.pushState({}, "", relative);
+    setShareToken("");
+  }
+
+  if (shareToken) {
+    return (
+      <main className="relative min-h-screen overflow-hidden bg-terminal-bg px-4 py-8 text-zinc-100 md:px-8">
+        <div className="aurora" />
+        <section className="mx-auto grid max-w-4xl gap-6">
+          <header className="panel flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.25em] text-neon-green">
+                <Shield className="h-4 w-4" />
+                Project Aegis Shared Proof
+              </p>
+              <h1 className="mt-2 text-2xl font-bold md:text-3xl">Verify Shared Integrity Link</h1>
+              <p className="mt-1 text-sm text-zinc-300">{heroStatus}</p>
+            </div>
+            <button className="btn-secondary" onClick={clearShareMode}>
+              Exit Shared View
+            </button>
+          </header>
+
+          <SharedVerifyPanel shareToken={shareToken} />
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-terminal-bg px-4 py-8 text-zinc-100 md:px-8">
       <div className="aurora" />
@@ -104,14 +162,16 @@ export default function App() {
           </p>
         ) : null}
 
-        <section className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+        <section className="grid gap-6 lg:grid-cols-[1.2fr_1fr_1fr]">
           <UploadPanel onUploaded={loadProofs} />
           <AuthPanel user={user} onUserUpdate={setUser} />
+          <ProfilePanel user={user} proofsCount={proofs.length} />
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-          <ProofTable proofs={proofs} onRefresh={loadProofs} />
+        <section className="grid gap-6 lg:grid-cols-[1.5fr_1fr_1fr]">
+          <ProofTable proofs={proofs} onRefresh={loadProofs} user={user} />
           <LiveFeed socketState={socketState} events={events} />
+          <NotificationsPanel user={user} />
         </section>
       </section>
     </main>

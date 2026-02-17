@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
-import { CheckCircle2, FileSearch, ShieldX } from "lucide-react";
+import { CheckCircle2, Copy, FileSearch, Share2, ShieldX, Trash2 } from "lucide-react";
 
-import { verifyProof } from "../lib/api";
+import { createShareLink, deleteProof, verifyProof } from "../lib/api";
 
 function StatusBadge({ status }) {
   const verified = status === "VERIFIED";
@@ -18,17 +18,33 @@ function StatusBadge({ status }) {
   );
 }
 
-export default function ProofTable({ proofs, onRefresh }) {
+function fallbackShareUrl(row) {
+  if (!row?.share_token) {
+    return "";
+  }
+  if (typeof window === "undefined") {
+    return `?share=${encodeURIComponent(row.share_token)}`;
+  }
+  return `${window.location.origin}/?share=${encodeURIComponent(row.share_token)}`;
+}
+
+export default function ProofTable({ proofs, onRefresh, user }) {
   const [busyId, setBusyId] = useState("");
+  const [actionBusyId, setActionBusyId] = useState("");
   const [verifyResult, setVerifyResult] = useState(null);
   const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const [shareLinks, setShareLinks] = useState({});
   const selectedFileRef = useRef(null);
+  const filePickerRef = useRef(null);
+  const [selectedFileName, setSelectedFileName] = useState("");
 
   const tableRows = useMemo(() => proofs ?? [], [proofs]);
 
   async function runVerification(verificationId, withFile) {
     setBusyId(verificationId);
     setError("");
+    setStatus("");
     setVerifyResult(null);
     try {
       const payload = await verifyProof(
@@ -41,6 +57,78 @@ export default function ProofTable({ proofs, onRefresh }) {
       setError(requestError.message);
     } finally {
       setBusyId("");
+    }
+  }
+
+  async function copyText(value) {
+    if (!value) {
+      return;
+    }
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      setStatus("Copy is not available in this browser.");
+      return;
+    }
+    await navigator.clipboard.writeText(value);
+  }
+
+  async function handleShare(row) {
+    setActionBusyId(`share:${row.verification_id}`);
+    setError("");
+    setStatus("");
+    try {
+      const payload = await createShareLink(row.verification_id);
+      setShareLinks((previous) => ({
+        ...previous,
+        [row.verification_id]: payload.share_url
+      }));
+      await copyText(payload.share_url);
+      setStatus("Share link created and copied.");
+      onRefresh();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setActionBusyId("");
+    }
+  }
+
+  async function handleCopyLink(row) {
+    const shareUrl = shareLinks[row.verification_id] || fallbackShareUrl(row);
+    if (!shareUrl) {
+      setStatus("Create a share link first.");
+      return;
+    }
+    try {
+      await copyText(shareUrl);
+      setStatus("Share link copied.");
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }
+
+  async function handleDelete(row) {
+    const shouldDelete = window.confirm(
+      `Delete proof for "${row.filename}" (${row.verification_id})?`
+    );
+    if (!shouldDelete) {
+      return;
+    }
+
+    setActionBusyId(`delete:${row.verification_id}`);
+    setError("");
+    setStatus("");
+    try {
+      await deleteProof(row.verification_id);
+      setShareLinks((previous) => {
+        const next = { ...previous };
+        delete next[row.verification_id];
+        return next;
+      });
+      setStatus("Proof deleted.");
+      onRefresh();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setActionBusyId("");
     }
   }
 
@@ -85,19 +173,78 @@ export default function ProofTable({ proofs, onRefresh }) {
                     <div className="flex flex-wrap gap-2">
                       <button
                         className="btn-secondary text-[11px]"
-                        disabled={busyId === row.verification_id}
+                        disabled={
+                          busyId === row.verification_id ||
+                          actionBusyId === `share:${row.verification_id}` ||
+                          actionBusyId === `delete:${row.verification_id}`
+                        }
                         onClick={() => runVerification(row.verification_id, false)}
                       >
                         Metadata Verify
                       </button>
                       <button
                         className="btn-primary text-[11px]"
-                        disabled={busyId === row.verification_id}
+                        disabled={
+                          busyId === row.verification_id ||
+                          actionBusyId === `share:${row.verification_id}` ||
+                          actionBusyId === `delete:${row.verification_id}`
+                        }
                         onClick={() => runVerification(row.verification_id, true)}
                       >
                         Tamper Check
                       </button>
+                      <button
+                        className="btn-secondary text-[11px]"
+                        disabled={
+                          !user ||
+                          busyId === row.verification_id ||
+                          actionBusyId === `share:${row.verification_id}` ||
+                          actionBusyId === `delete:${row.verification_id}`
+                        }
+                        onClick={() => handleShare(row)}
+                      >
+                        <Share2 className="h-3.5 w-3.5" />
+                        <span>
+                          {actionBusyId === `share:${row.verification_id}`
+                            ? "Sharing..."
+                            : "Share"}
+                        </span>
+                      </button>
+                      <button
+                        className="btn-secondary text-[11px]"
+                        disabled={
+                          busyId === row.verification_id ||
+                          actionBusyId === `share:${row.verification_id}` ||
+                          actionBusyId === `delete:${row.verification_id}`
+                        }
+                        onClick={() => handleCopyLink(row)}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        <span>Copy Link</span>
+                      </button>
+                      <button
+                        className="btn-secondary text-[11px]"
+                        disabled={
+                          !user ||
+                          busyId === row.verification_id ||
+                          actionBusyId === `share:${row.verification_id}` ||
+                          actionBusyId === `delete:${row.verification_id}`
+                        }
+                        onClick={() => handleDelete(row)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>
+                          {actionBusyId === `delete:${row.verification_id}`
+                            ? "Deleting..."
+                            : "Delete"}
+                        </span>
+                      </button>
                     </div>
+                    {(shareLinks[row.verification_id] || fallbackShareUrl(row)) && (
+                      <p className="mt-2 break-all text-[11px] text-zinc-400">
+                        {shareLinks[row.verification_id] || fallbackShareUrl(row)}
+                      </p>
+                    )}
                   </td>
                 </tr>
               ))
@@ -106,16 +253,31 @@ export default function ProofTable({ proofs, onRefresh }) {
         </table>
       </div>
 
-      <label className="text-xs text-zinc-300">
-        Optional file for tamper check
+      <div className="space-y-2">
+        <p className="text-xs text-zinc-300">Optional file for tamper check</p>
         <input
+          ref={filePickerRef}
           type="file"
-          className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs"
+          className="hidden"
           onChange={(event) => {
-            selectedFileRef.current = event.target.files?.[0] ?? null;
+            const file = event.target.files?.[0] ?? null;
+            selectedFileRef.current = file;
+            setSelectedFileName(file?.name ?? "");
           }}
         />
-      </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="btn-secondary text-[11px]"
+            onClick={() => filePickerRef.current?.click()}
+          >
+            Choose file
+          </button>
+          <span className="text-xs text-zinc-400">
+            {selectedFileName || "No file selected"}
+          </span>
+        </div>
+      </div>
 
       {verifyResult ? (
         <div
@@ -138,6 +300,12 @@ export default function ProofTable({ proofs, onRefresh }) {
       ) : null}
 
       {error ? <p className="text-xs text-neon-red">{error}</p> : null}
+      {status ? <p className="text-xs text-zinc-300">{status}</p> : null}
+      {!user ? (
+        <p className="text-[11px] text-zinc-500">
+          Sign in to create or delete shareable proofs.
+        </p>
+      ) : null}
     </section>
   );
 }

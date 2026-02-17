@@ -9,6 +9,7 @@ export default function UploadPanel({ onUploaded }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  const [selectedFileName, setSelectedFileName] = useState("");
 
   const onDrop = useCallback(
     async (acceptedFiles) => {
@@ -20,6 +21,7 @@ export default function UploadPanel({ onUploaded }) {
       setProgress(0);
       setError("");
       setResult(null);
+      setSelectedFileName(candidate.name);
 
       try {
         const response = await uploadProof(candidate, setProgress);
@@ -34,10 +36,12 @@ export default function UploadPanel({ onUploaded }) {
     [onUploaded]
   );
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     multiple: false,
-    maxSize: 200 * 1024 * 1024
+    maxSize: 200 * 1024 * 1024,
+    noClick: true,
+    noKeyboard: true
   });
 
   return (
@@ -50,12 +54,17 @@ export default function UploadPanel({ onUploaded }) {
         <input {...getInputProps()} />
         <FileUp className="h-8 w-8 text-neon-green" />
         <p className="text-sm text-zinc-200">
-          {isDragActive
-            ? "Release to sign and broadcast"
-            : "Drag and drop a document, or click to select"}
+          {isDragActive ? "Release to sign and broadcast" : "Drag and drop a document"}
         </p>
         <p className="text-xs text-zinc-400">
           SHA3-512 to ML-DSA signature to AES vault to Supabase ledger
+        </p>
+        <button type="button" className="btn-primary mt-2" onClick={open} disabled={busy}>
+          <FileUp className="h-4 w-4" />
+          <span>{busy ? "Uploading..." : "Choose file"}</span>
+        </button>
+        <p className="text-xs text-zinc-400">
+          {selectedFileName ? `Selected: ${selectedFileName}` : "No file selected"}
         </p>
       </div>
 
