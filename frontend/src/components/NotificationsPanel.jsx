@@ -10,7 +10,11 @@ function statusColor(item) {
   return "text-neon-green";
 }
 
-export default function NotificationsPanel({ user }) {
+export default function NotificationsPanel({
+  user,
+  onUnreadCountChange,
+  embedded = false
+}) {
   const [items, setItems] = useState([]);
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
@@ -19,13 +23,16 @@ export default function NotificationsPanel({ user }) {
   async function load() {
     if (!user) {
       setItems([]);
+      onUnreadCountChange?.(0);
       return;
     }
     setLoading(true);
     setError("");
     try {
       const payload = await listNotifications();
-      setItems(payload.items ?? []);
+      const nextItems = payload.items ?? [];
+      setItems(nextItems);
+      onUnreadCountChange?.(nextItems.filter((item) => !item.read_at).length);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -47,13 +54,15 @@ export default function NotificationsPanel({ user }) {
     setError("");
     try {
       await markNotificationRead(notificationId);
-      setItems((previous) =>
-        previous.map((item) =>
+      setItems((previous) => {
+        const next = previous.map((item) =>
           item.id === notificationId
             ? { ...item, read_at: new Date().toISOString() }
             : item
-        )
-      );
+        );
+        onUnreadCountChange?.(next.filter((item) => !item.read_at).length);
+        return next;
+      });
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -61,8 +70,10 @@ export default function NotificationsPanel({ user }) {
     }
   }
 
+  const rootClass = embedded ? "space-y-3" : "panel space-y-3";
+
   return (
-    <section className="panel space-y-3">
+    <section className={rootClass}>
       <div className="flex items-center justify-between">
         <h2 className="panel-title">Notifications</h2>
         <span className="inline-flex items-center gap-2 text-xs text-zinc-300">

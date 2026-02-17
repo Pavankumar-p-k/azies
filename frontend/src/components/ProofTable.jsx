@@ -170,9 +170,9 @@ export default function ProofTable({ proofs, onRefresh, user }) {
                   </td>
                   <td className="px-3 py-3">{new Date(row.created_at).toLocaleString()}</td>
                   <td className="px-3 py-3">
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:flex-wrap">
                       <button
-                        className="btn-secondary text-[11px]"
+                        className="btn-secondary w-full text-[11px] sm:w-auto"
                         disabled={
                           busyId === row.verification_id ||
                           actionBusyId === `share:${row.verification_id}` ||
@@ -183,7 +183,7 @@ export default function ProofTable({ proofs, onRefresh, user }) {
                         Metadata Verify
                       </button>
                       <button
-                        className="btn-primary text-[11px]"
+                        className="btn-primary w-full text-[11px] sm:w-auto"
                         disabled={
                           busyId === row.verification_id ||
                           actionBusyId === `share:${row.verification_id}` ||
@@ -194,7 +194,7 @@ export default function ProofTable({ proofs, onRefresh, user }) {
                         Tamper Check
                       </button>
                       <button
-                        className="btn-secondary text-[11px]"
+                        className="btn-secondary w-full text-[11px] sm:w-auto"
                         disabled={
                           !user ||
                           busyId === row.verification_id ||
@@ -211,7 +211,7 @@ export default function ProofTable({ proofs, onRefresh, user }) {
                         </span>
                       </button>
                       <button
-                        className="btn-secondary text-[11px]"
+                        className="btn-secondary w-full text-[11px] sm:w-auto"
                         disabled={
                           busyId === row.verification_id ||
                           actionBusyId === `share:${row.verification_id}` ||
@@ -223,7 +223,7 @@ export default function ProofTable({ proofs, onRefresh, user }) {
                         <span>Copy Link</span>
                       </button>
                       <button
-                        className="btn-secondary text-[11px]"
+                        className="btn-secondary w-full text-[11px] sm:w-auto"
                         disabled={
                           !user ||
                           busyId === row.verification_id ||

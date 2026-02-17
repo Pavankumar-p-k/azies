@@ -25,6 +25,8 @@ class SupabaseRepository:
         self._local_profiles: Dict[str, Dict[str, Any]] = {}
         self._local_notifications: List[Dict[str, Any]] = []
         self._local_verification_checks: List[Dict[str, Any]] = []
+        self._memory_share_links: Dict[str, str] = {}
+        self._schema_warning_cache: set[str] = set()
 
     @property
     def enabled(self) -> bool:
@@ -97,21 +99,30 @@ class SupabaseRepository:
 
     def get_or_create_profile(self, user_id: str, email: str) -> Dict[str, Any]:
         if self.client:
-            response = (
-                self.client.table("user_profiles")
-                .select("*")
-                .eq("id", user_id)
-                .limit(1)
-                .execute()
-            )
-            data = response.data or []
-            if data:
-                return data[0]
+            try:
+                response = (
+                    self.client.table("user_profiles")
+                    .select("*")
+                    .eq("id", user_id)
+                    .limit(1)
+                    .execute()
+                )
+                data = response.data or []
+                if data:
+                    return data[0]
 
-            default_profile = self._default_profile(user_id, email)
-            inserted = self.client.table("user_profiles").insert(default_profile).execute()
-            inserted_data = inserted.data or []
-            return inserted_data[0] if inserted_data else default_profile
+                default_profile = self._default_profile(user_id, email)
+                inserted = self.client.table("user_profiles").insert(default_profile).execute()
+                inserted_data = inserted.data or []
+                return inserted_data[0] if inserted_data else default_profile
+            except Exception as exc:
+                if not self._is_schema_compat_error(exc):
+                    raise
+                self._warn_schema_fallback(
+                    "user_profiles",
+                    "Supabase table user_profiles is missing. Using in-memory profile fallback.",
+                    exc,
+                )
 
         profile = self._local_profiles.get(email)
         if profile:
@@ -127,18 +138,27 @@ class SupabaseRepository:
             return profile
 
         if self.client:
-            response = (
-                self.client.table("user_profiles")
-                .update(safe_updates)
-                .eq("id", user_id)
-                .eq("email", email)
-                .execute()
-            )
-            data = response.data or []
-            if data:
-                return data[0]
-            refreshed = self.get_or_create_profile(user_id, email)
-            return refreshed
+            try:
+                response = (
+                    self.client.table("user_profiles")
+                    .update(safe_updates)
+                    .eq("id", user_id)
+                    .eq("email", email)
+                    .execute()
+                )
+                data = response.data or []
+                if data:
+                    return data[0]
+                refreshed = self.get_or_create_profile(user_id, email)
+                return refreshed
+            except Exception as exc:
+                if not self._is_schema_compat_error(exc):
+                    raise
+                self._warn_schema_fallback(
+                    "user_profiles_update",
+                    "Supabase table user_profiles is missing. Saving profile in memory only.",
+                    exc,
+                )
 
         profile.update(safe_updates)
         profile["updated_at"] = self.now_iso()
@@ -147,16 +167,34 @@ class SupabaseRepository:
 
     def get_proof_by_share_token(self, share_token: str) -> Optional[Dict[str, Any]]:
         if self.client:
-            response = (
-                self.client.table(self.settings.supabase_table)
-                .select("*")
-                .eq("share_token", share_token)
-                .eq("share_enabled", True)
-                .limit(1)
-                .execute()
-            )
-            data = response.data or []
-            return data[0] if data else None
+            try:
+                response = (
+                    self.client.table(self.settings.supabase_table)
+                    .select("*")
+                    .eq("share_token", share_token)
+                    .eq("share_enabled", True)
+                    .limit(1)
+                    .execute()
+                )
+                data = response.data or []
+                return data[0] if data else None
+            except Exception as exc:
+                if not self._is_schema_compat_error(exc):
+                    raise
+                self._warn_schema_fallback(
+                    "share_columns_lookup",
+                    "Share-link columns are missing on integrity_proofs. Falling back to in-memory share links until migration is applied.",
+                    exc,
+                )
+                verification_id = self._memory_share_links.get(share_token)
+                if verification_id:
+                    proof = self.get_proof(verification_id)
+                    if proof:
+                        return {
+                            **proof,
+                            "share_token": share_token,
+                            "share_enabled": True,
+                        }
 
         proofs = self._read_local_proofs()
         for proof in proofs:
@@ -171,15 +209,36 @@ class SupabaseRepository:
             "shared_at": self.now_iso(),
         }
         if self.client:
-            response = (
-                self.client.table(self.settings.supabase_table)
-                .update(payload)
-                .eq("verification_id", verification_id)
-                .eq("owner_email", owner_email)
-                .execute()
-            )
-            data = response.data or []
-            return data[0] if data else None
+            try:
+                response = (
+                    self.client.table(self.settings.supabase_table)
+                    .update(payload)
+                    .eq("verification_id", verification_id)
+                    .eq("owner_email", owner_email)
+                    .execute()
+                )
+                data = response.data or []
+                return data[0] if data else None
+            except Exception as exc:
+                if not self._is_schema_compat_error(exc):
+                    raise
+                self._warn_schema_fallback(
+                    "share_columns_update",
+                    "Share-link columns are missing on integrity_proofs. Creating in-memory share links until migration is applied.",
+                    exc,
+                )
+                self._memory_share_links[share_token] = verification_id
+                proof = self.get_proof(verification_id)
+                if proof:
+                    return {
+                        **proof,
+                        **payload,
+                    }
+                return {
+                    "verification_id": verification_id,
+                    "owner_email": owner_email,
+                    **payload,
+                }
 
         proofs = self._read_local_proofs()
         target = None
@@ -221,7 +280,17 @@ class SupabaseRepository:
         }
 
         if self.client:
-            self.client.table("verification_checks").insert(check_row).execute()
+            try:
+                self.client.table("verification_checks").insert(check_row).execute()
+            except Exception as exc:
+                if not self._is_schema_compat_error(exc):
+                    raise
+                self._warn_schema_fallback(
+                    "verification_checks",
+                    "Table verification_checks is missing. External checks will not be persisted in Supabase.",
+                    exc,
+                )
+                self._local_verification_checks.append(check_row)
         else:
             self._local_verification_checks.append(check_row)
 
@@ -237,16 +306,26 @@ class SupabaseRepository:
         }
 
         if self.client:
-            updated = (
-                self.client.table(self.settings.supabase_table)
-                .update(patch)
-                .eq("verification_id", verification_id)
-                .execute()
-            )
-            data = updated.data or []
-            if data:
-                proof = data[0]
-            else:
+            try:
+                updated = (
+                    self.client.table(self.settings.supabase_table)
+                    .update(patch)
+                    .eq("verification_id", verification_id)
+                    .execute()
+                )
+                data = updated.data or []
+                if data:
+                    proof = data[0]
+                else:
+                    proof = {**proof, **patch}
+            except Exception as exc:
+                if not self._is_schema_compat_error(exc):
+                    raise
+                self._warn_schema_fallback(
+                    "integrity_proofs_share_fields",
+                    "New share/cleanup columns are missing on integrity_proofs. Runtime will continue without persisted external-check counters.",
+                    exc,
+                )
                 proof = {**proof, **patch}
         else:
             proofs = self._read_local_proofs()
@@ -278,24 +357,42 @@ class SupabaseRepository:
             "created_at": self.now_iso(),
         }
         if self.client:
-            response = self.client.table("user_notifications").insert(payload).execute()
-            data = response.data or []
-            return data[0] if data else payload
+            try:
+                response = self.client.table("user_notifications").insert(payload).execute()
+                data = response.data or []
+                return data[0] if data else payload
+            except Exception as exc:
+                if not self._is_schema_compat_error(exc):
+                    raise
+                self._warn_schema_fallback(
+                    "user_notifications_insert",
+                    "Table user_notifications is missing. Notification write will fallback to local memory.",
+                    exc,
+                )
         payload["id"] = len(self._local_notifications) + 1
         self._local_notifications.append(payload)
         return payload
 
     def list_notifications(self, owner_email: str, limit: int = 50) -> List[Dict[str, Any]]:
         if self.client:
-            response = (
-                self.client.table("user_notifications")
-                .select("*")
-                .eq("owner_email", owner_email)
-                .order("created_at", desc=True)
-                .limit(limit)
-                .execute()
-            )
-            return response.data or []
+            try:
+                response = (
+                    self.client.table("user_notifications")
+                    .select("*")
+                    .eq("owner_email", owner_email)
+                    .order("created_at", desc=True)
+                    .limit(limit)
+                    .execute()
+                )
+                return response.data or []
+            except Exception as exc:
+                if not self._is_schema_compat_error(exc):
+                    raise
+                self._warn_schema_fallback(
+                    "user_notifications_list",
+                    "Table user_notifications is missing. Notification reads will fallback to local memory.",
+                    exc,
+                )
         filtered = [
             item for item in self._local_notifications if item.get("owner_email") == owner_email
         ]
@@ -304,14 +401,23 @@ class SupabaseRepository:
 
     def mark_notification_read(self, notification_id: int, owner_email: str) -> bool:
         if self.client:
-            response = (
-                self.client.table("user_notifications")
-                .update({"read_at": self.now_iso()})
-                .eq("id", notification_id)
-                .eq("owner_email", owner_email)
-                .execute()
-            )
-            return bool(response.data)
+            try:
+                response = (
+                    self.client.table("user_notifications")
+                    .update({"read_at": self.now_iso()})
+                    .eq("id", notification_id)
+                    .eq("owner_email", owner_email)
+                    .execute()
+                )
+                return bool(response.data)
+            except Exception as exc:
+                if not self._is_schema_compat_error(exc):
+                    raise
+                self._warn_schema_fallback(
+                    "user_notifications_mark_read",
+                    "Table user_notifications is missing. Notification updates will fallback to local memory.",
+                    exc,
+                )
 
         for item in self._local_notifications:
             if item.get("id") == notification_id and item.get("owner_email") == owner_email:
@@ -332,11 +438,13 @@ class SupabaseRepository:
             self.client.table(self.settings.supabase_table).delete().eq(
                 "verification_id", verification_id
             ).eq("owner_email", owner_email).execute()
+            self._remove_memory_share_links_for_verification(verification_id)
             return proof
 
         proofs = self._read_local_proofs()
         proofs = [item for item in proofs if item.get("verification_id") != verification_id]
         self._overwrite_local_ledgers(proofs)
+        self._remove_memory_share_links_for_verification(verification_id)
         return proof
 
     def delete_vault_blob(self, path: Optional[str]) -> None:
@@ -351,21 +459,31 @@ class SupabaseRepository:
 
     def cleanup_expired_proofs(self, limit: int = 100) -> int:
         if self.client:
-            now_iso = self.now_iso()
-            response = (
-                self.client.table(self.settings.supabase_table)
-                .select("verification_id,storage_path")
-                .lte("auto_delete_at", now_iso)
-                .limit(limit)
-                .execute()
-            )
-            rows = response.data or []
-            for row in rows:
-                self.delete_vault_blob(row.get("storage_path"))
-                self.client.table(self.settings.supabase_table).delete().eq(
-                    "verification_id", row["verification_id"]
-                ).execute()
-            return len(rows)
+            try:
+                now_iso = self.now_iso()
+                response = (
+                    self.client.table(self.settings.supabase_table)
+                    .select("verification_id,storage_path")
+                    .lte("auto_delete_at", now_iso)
+                    .limit(limit)
+                    .execute()
+                )
+                rows = response.data or []
+                for row in rows:
+                    self.delete_vault_blob(row.get("storage_path"))
+                    self.client.table(self.settings.supabase_table).delete().eq(
+                        "verification_id", row["verification_id"]
+                    ).execute()
+                return len(rows)
+            except Exception as exc:
+                if not self._is_schema_compat_error(exc):
+                    raise
+                self._warn_schema_fallback(
+                    "integrity_proofs_auto_delete",
+                    "Column integrity_proofs.auto_delete_at is missing. Expired-proof cleanup is skipped until migration is applied.",
+                    exc,
+                )
+                return 0
 
         proofs = self._read_local_proofs()
         now = datetime.now(timezone.utc)
@@ -448,6 +566,35 @@ class SupabaseRepository:
             "created_at": now,
             "updated_at": now,
         }
+
+    def _warn_schema_fallback(self, key: str, message: str, exc: Exception) -> None:
+        if key in self._schema_warning_cache:
+            return
+        self._schema_warning_cache.add(key)
+        logger.warning("%s Error=%s", message, exc)
+
+    def _remove_memory_share_links_for_verification(self, verification_id: str) -> None:
+        stale_tokens = [
+            token for token, value in self._memory_share_links.items() if value == verification_id
+        ]
+        for token in stale_tokens:
+            self._memory_share_links.pop(token, None)
+
+    @staticmethod
+    def _is_schema_compat_error(exc: Exception) -> bool:
+        code = ""
+        raw = exc.args[0] if getattr(exc, "args", ()) else None
+        if isinstance(raw, dict):
+            code = str(raw.get("code") or "").upper()
+        if code in {"42703", "42P01", "PGRST205"}:
+            return True
+
+        lowered = str(exc).lower()
+        return (
+            "does not exist" in lowered
+            or "schema cache" in lowered
+            or "could not find the table" in lowered
+        )
 
     @staticmethod
     def now_iso() -> str:

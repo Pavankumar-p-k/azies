@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Save, UserRound } from "lucide-react";
+import { FileText, Save, UserRound } from "lucide-react";
 
 import { getMyProfile, updateMyProfile } from "../lib/api";
 
@@ -7,7 +7,14 @@ function statClass() {
   return "rounded-lg border border-emerald-300/20 bg-black/20 px-3 py-2 text-center";
 }
 
-export default function ProfilePanel({ user, proofsCount }) {
+export default function ProfilePanel({
+  user,
+  proofsCount,
+  onPostsClick,
+  onSaved,
+  initialProfile,
+  onProfileLoaded
+}) {
   const [profile, setProfile] = useState(null);
   const [form, setForm] = useState({
     handle: "",
@@ -23,6 +30,18 @@ export default function ProfilePanel({ user, proofsCount }) {
       setProfile(null);
       return;
     }
+
+    if (initialProfile && initialProfile.email === user.email) {
+      setProfile(initialProfile);
+      setForm({
+        handle: initialProfile.handle ?? "",
+        display_name: initialProfile.display_name ?? "",
+        bio: initialProfile.bio ?? "",
+        avatar_url: initialProfile.avatar_url ?? ""
+      });
+      return;
+    }
+
     let mounted = true;
     getMyProfile()
       .then((payload) => {
@@ -30,6 +49,7 @@ export default function ProfilePanel({ user, proofsCount }) {
           return;
         }
         setProfile(payload);
+        onProfileLoaded?.(payload);
         setForm({
           handle: payload.handle ?? "",
           display_name: payload.display_name ?? "",
@@ -46,7 +66,7 @@ export default function ProfilePanel({ user, proofsCount }) {
     return () => {
       mounted = false;
     };
-  }, [user]);
+  }, [initialProfile, onProfileLoaded, user]);
 
   const stats = useMemo(
     () => ({
@@ -64,6 +84,8 @@ export default function ProfilePanel({ user, proofsCount }) {
       const payload = await updateMyProfile(form);
       setProfile(payload);
       setStatus("Profile updated.");
+      onProfileLoaded?.(payload);
+      onSaved?.(payload);
     } catch (error) {
       setStatus(error.message);
     } finally {
@@ -106,11 +128,21 @@ export default function ProfilePanel({ user, proofsCount }) {
             <p className="text-xs text-zinc-400">@{form.handle || "handle"}</p>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-          <div className={statClass()}>
-            <p className="text-zinc-400">Posts</p>
-            <p className="font-semibold text-neon-green">{stats.posts}</p>
-          </div>
+        <div className="mt-4 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
+          {onPostsClick ? (
+            <button type="button" className={`${statClass()} cursor-pointer`} onClick={onPostsClick}>
+              <p className="inline-flex items-center gap-1 text-zinc-400">
+                <FileText className="h-3.5 w-3.5" />
+                Posts
+              </p>
+              <p className="font-semibold text-neon-green">{stats.posts}</p>
+            </button>
+          ) : (
+            <div className={statClass()}>
+              <p className="text-zinc-400">Posts</p>
+              <p className="font-semibold text-neon-green">{stats.posts}</p>
+            </div>
+          )}
           <div className={statClass()}>
             <p className="text-zinc-400">Secure Shares</p>
             <p className="font-semibold text-neon-green">{stats.secureShares}</p>
