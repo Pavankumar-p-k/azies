@@ -19,7 +19,10 @@ class Settings(BaseSettings):
     app_name: str = "Project Aegis API"
     app_env: str = "development"
     api_prefix: str = "/api/v1"
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,"
+        "http://localhost:4173,http://127.0.0.1:4173"
+    )
 
     supabase_url: str = ""
     supabase_anon_key: str = ""
@@ -31,6 +34,8 @@ class Settings(BaseSettings):
     pqc_algorithm: str = "ML-DSA-65"
 
     p2p_peers: str = ""
+    public_app_url: str = "http://localhost:5173"
+    auto_delete_after_recheck_hours: int = 24
 
     @field_validator("app_env")
     @classmethod

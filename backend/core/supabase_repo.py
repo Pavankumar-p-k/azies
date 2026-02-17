@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -21,6 +22,9 @@ class SupabaseRepository:
         backend_root = Path(__file__).resolve().parent.parent
         self._node_a_path = backend_root / "storage" / "node_A" / "ledger.json"
         self._node_b_path = backend_root / "storage" / "node_B" / "ledger.json"
+        self._local_profiles: Dict[str, Dict[str, Any]] = {}
+        self._local_notifications: List[Dict[str, Any]] = []
+        self._local_verification_checks: List[Dict[str, Any]] = []
 
     @property
     def enabled(self) -> bool:
@@ -32,16 +36,22 @@ class SupabaseRepository:
             return
         self.client = create_client(self.settings.supabase_url, self.settings.supabase_key)
 
-    def get_user_email_from_token(self, access_token: str) -> Optional[str]:
+    def get_user_from_token(self, access_token: str) -> Optional[Dict[str, str]]:
         if not self.client:
             return None
         try:
             response = self.client.auth.get_user(access_token)
-            if response and response.user:
-                return response.user.email
+            if response and response.user and response.user.email:
+                return {"id": response.user.id, "email": response.user.email}
         except Exception:
             return None
         return None
+
+    def get_user_email_from_token(self, access_token: str) -> Optional[str]:
+        user = self.get_user_from_token(access_token)
+        if not user:
+            return None
+        return user["email"]
 
     def insert_proof(self, proof: Dict[str, Any]) -> None:
         if self.client:
@@ -85,6 +95,299 @@ class SupabaseRepository:
         proofs.sort(key=lambda item: item.get("created_at", ""), reverse=True)
         return proofs[:limit]
 
+    def get_or_create_profile(self, user_id: str, email: str) -> Dict[str, Any]:
+        if self.client:
+            response = (
+                self.client.table("user_profiles")
+                .select("*")
+                .eq("id", user_id)
+                .limit(1)
+                .execute()
+            )
+            data = response.data or []
+            if data:
+                return data[0]
+
+            default_profile = self._default_profile(user_id, email)
+            inserted = self.client.table("user_profiles").insert(default_profile).execute()
+            inserted_data = inserted.data or []
+            return inserted_data[0] if inserted_data else default_profile
+
+        profile = self._local_profiles.get(email)
+        if profile:
+            return profile
+        profile = self._default_profile(user_id, email)
+        self._local_profiles[email] = profile
+        return profile
+
+    def update_profile(self, user_id: str, email: str, updates: Dict[str, Any]) -> Dict[str, Any]:
+        profile = self.get_or_create_profile(user_id, email)
+        safe_updates = {key: value for key, value in updates.items() if value is not None}
+        if not safe_updates:
+            return profile
+
+        if self.client:
+            response = (
+                self.client.table("user_profiles")
+                .update(safe_updates)
+                .eq("id", user_id)
+                .eq("email", email)
+                .execute()
+            )
+            data = response.data or []
+            if data:
+                return data[0]
+            refreshed = self.get_or_create_profile(user_id, email)
+            return refreshed
+
+        profile.update(safe_updates)
+        profile["updated_at"] = self.now_iso()
+        self._local_profiles[email] = profile
+        return profile
+
+    def get_proof_by_share_token(self, share_token: str) -> Optional[Dict[str, Any]]:
+        if self.client:
+            response = (
+                self.client.table(self.settings.supabase_table)
+                .select("*")
+                .eq("share_token", share_token)
+                .eq("share_enabled", True)
+                .limit(1)
+                .execute()
+            )
+            data = response.data or []
+            return data[0] if data else None
+
+        proofs = self._read_local_proofs()
+        for proof in proofs:
+            if proof.get("share_token") == share_token and proof.get("share_enabled"):
+                return proof
+        return None
+
+    def enable_share_link(self, verification_id: str, owner_email: str, share_token: str) -> Optional[Dict[str, Any]]:
+        payload = {
+            "share_token": share_token,
+            "share_enabled": True,
+            "shared_at": self.now_iso(),
+        }
+        if self.client:
+            response = (
+                self.client.table(self.settings.supabase_table)
+                .update(payload)
+                .eq("verification_id", verification_id)
+                .eq("owner_email", owner_email)
+                .execute()
+            )
+            data = response.data or []
+            return data[0] if data else None
+
+        proofs = self._read_local_proofs()
+        target = None
+        for proof in proofs:
+            if (
+                proof.get("verification_id") == verification_id
+                and proof.get("owner_email") == owner_email
+            ):
+                proof.update(payload)
+                target = proof
+                break
+        if target is None:
+            return None
+        self._overwrite_local_ledgers(proofs)
+        return target
+
+    def record_external_check(
+        self,
+        proof: Dict[str, Any],
+        checker_email: str,
+        checker_filename: str,
+        checker_hash: str,
+        status: str,
+        detail: str,
+        auto_delete_after_hours: int,
+    ) -> Dict[str, Any]:
+        verification_id = proof["verification_id"]
+        share_token = proof.get("share_token") or ""
+        check_row = {
+            "verification_id": verification_id,
+            "share_token": share_token,
+            "checker_email": checker_email,
+            "checker_filename": checker_filename,
+            "checker_hash_sha3_512": checker_hash,
+            "expected_hash_sha3_512": proof["hash_sha3_512"],
+            "status": status,
+            "detail": detail,
+            "created_at": self.now_iso(),
+        }
+
+        if self.client:
+            self.client.table("verification_checks").insert(check_row).execute()
+        else:
+            self._local_verification_checks.append(check_row)
+
+        next_count = int(proof.get("external_check_count") or 0) + 1
+        now = datetime.now(timezone.utc)
+        auto_delete_at = proof.get("auto_delete_at")
+        if not auto_delete_at:
+            auto_delete_at = (now + timedelta(hours=auto_delete_after_hours)).isoformat()
+        patch = {
+            "external_check_count": next_count,
+            "last_external_check_at": now.isoformat(),
+            "auto_delete_at": auto_delete_at,
+        }
+
+        if self.client:
+            updated = (
+                self.client.table(self.settings.supabase_table)
+                .update(patch)
+                .eq("verification_id", verification_id)
+                .execute()
+            )
+            data = updated.data or []
+            if data:
+                proof = data[0]
+            else:
+                proof = {**proof, **patch}
+        else:
+            proofs = self._read_local_proofs()
+            for item in proofs:
+                if item.get("verification_id") == verification_id:
+                    item.update(patch)
+                    proof = item
+                    break
+            self._overwrite_local_ledgers(proofs)
+
+        return proof
+
+    def insert_notification(
+        self,
+        owner_email: str,
+        verification_id: str,
+        event_type: str,
+        checker_email: str,
+        is_tampered: bool,
+        message: str,
+    ) -> Dict[str, Any]:
+        payload = {
+            "owner_email": owner_email,
+            "verification_id": verification_id,
+            "event_type": event_type,
+            "checker_email": checker_email,
+            "is_tampered": is_tampered,
+            "message": message,
+            "created_at": self.now_iso(),
+        }
+        if self.client:
+            response = self.client.table("user_notifications").insert(payload).execute()
+            data = response.data or []
+            return data[0] if data else payload
+        payload["id"] = len(self._local_notifications) + 1
+        self._local_notifications.append(payload)
+        return payload
+
+    def list_notifications(self, owner_email: str, limit: int = 50) -> List[Dict[str, Any]]:
+        if self.client:
+            response = (
+                self.client.table("user_notifications")
+                .select("*")
+                .eq("owner_email", owner_email)
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            return response.data or []
+        filtered = [
+            item for item in self._local_notifications if item.get("owner_email") == owner_email
+        ]
+        filtered.sort(key=lambda item: item.get("created_at", ""), reverse=True)
+        return filtered[:limit]
+
+    def mark_notification_read(self, notification_id: int, owner_email: str) -> bool:
+        if self.client:
+            response = (
+                self.client.table("user_notifications")
+                .update({"read_at": self.now_iso()})
+                .eq("id", notification_id)
+                .eq("owner_email", owner_email)
+                .execute()
+            )
+            return bool(response.data)
+
+        for item in self._local_notifications:
+            if item.get("id") == notification_id and item.get("owner_email") == owner_email:
+                item["read_at"] = self.now_iso()
+                return True
+        return False
+
+    def delete_proof(self, verification_id: str, owner_email: str) -> Optional[Dict[str, Any]]:
+        proof = self.get_proof(verification_id)
+        if not proof:
+            return None
+        if proof.get("owner_email") != owner_email:
+            return None
+
+        self.delete_vault_blob(proof.get("storage_path"))
+
+        if self.client:
+            self.client.table(self.settings.supabase_table).delete().eq(
+                "verification_id", verification_id
+            ).eq("owner_email", owner_email).execute()
+            return proof
+
+        proofs = self._read_local_proofs()
+        proofs = [item for item in proofs if item.get("verification_id") != verification_id]
+        self._overwrite_local_ledgers(proofs)
+        return proof
+
+    def delete_vault_blob(self, path: Optional[str]) -> None:
+        if not path:
+            return
+        if not self.client:
+            return
+        try:
+            self.client.storage.from_(self.settings.supabase_bucket).remove([path])
+        except Exception:
+            logger.warning("Failed to remove storage path %s", path)
+
+    def cleanup_expired_proofs(self, limit: int = 100) -> int:
+        if self.client:
+            now_iso = self.now_iso()
+            response = (
+                self.client.table(self.settings.supabase_table)
+                .select("verification_id,storage_path")
+                .lte("auto_delete_at", now_iso)
+                .limit(limit)
+                .execute()
+            )
+            rows = response.data or []
+            for row in rows:
+                self.delete_vault_blob(row.get("storage_path"))
+                self.client.table(self.settings.supabase_table).delete().eq(
+                    "verification_id", row["verification_id"]
+                ).execute()
+            return len(rows)
+
+        proofs = self._read_local_proofs()
+        now = datetime.now(timezone.utc)
+        kept: List[Dict[str, Any]] = []
+        removed = 0
+        for proof in proofs:
+            auto_delete_at = proof.get("auto_delete_at")
+            if not auto_delete_at:
+                kept.append(proof)
+                continue
+            try:
+                expires = datetime.fromisoformat(auto_delete_at)
+                if expires <= now:
+                    removed += 1
+                    continue
+            except Exception:
+                pass
+            kept.append(proof)
+        if removed > 0:
+            self._overwrite_local_ledgers(kept)
+        return removed
+
     def upload_vault_blob(self, path: str, payload: bytes) -> Optional[str]:
         if self.client:
             self.client.storage.from_(self.settings.supabase_bucket).upload(
@@ -112,6 +415,11 @@ class SupabaseRepository:
             ledger.append(proof)
             target.write_text(json.dumps(ledger, indent=2), encoding="utf-8")
 
+    def _overwrite_local_ledgers(self, proofs: List[Dict[str, Any]]) -> None:
+        for target in (self._node_a_path, self._node_b_path):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps(proofs, indent=2), encoding="utf-8")
+
     def _read_local_proofs(self) -> List[Dict[str, Any]]:
         if not self._node_a_path.exists():
             return []
@@ -119,6 +427,27 @@ class SupabaseRepository:
             return json.loads(self._node_a_path.read_text(encoding="utf-8"))
         except Exception:
             return []
+
+    @staticmethod
+    def _default_handle(email: str) -> str:
+        prefix = email.split("@")[0].lower()
+        cleaned = re.sub(r"[^a-z0-9_.-]+", "", prefix).strip("._-")
+        return cleaned or "aegis_user"
+
+    def _default_profile(self, user_id: str, email: str) -> Dict[str, Any]:
+        base = self._default_handle(email)
+        handle = f"{base}_{user_id[:6]}".strip("_")
+        now = self.now_iso()
+        return {
+            "id": user_id,
+            "email": email,
+            "handle": handle,
+            "display_name": handle,
+            "bio": "Quantum-secure file creator",
+            "avatar_url": None,
+            "created_at": now,
+            "updated_at": now,
+        }
 
     @staticmethod
     def now_iso() -> str:
