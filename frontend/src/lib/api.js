@@ -37,11 +37,26 @@ async function apiFetch(path, options = {}) {
   }
 }
 
-async function parseJson(response) {
-  try {
-    return await response.json();
-  } catch {
+function apiHtmlResponseError(path) {
+  return new Error(
+    `API route ${path} returned HTML instead of JSON. Set VITE_API_BASE_URL to your backend URL ending in /api/v1 and ensure frontend rewrites do not capture /api routes.`
+  );
+}
+
+async function parseJson(response, path) {
+  const raw = await response.text();
+  if (!raw) {
     return {};
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const probe = raw.trim().slice(0, 24).toLowerCase();
+    if (probe.startsWith("<!doctype") || probe.startsWith("<html")) {
+      throw apiHtmlResponseError(path);
+    }
+    throw new Error(`Invalid JSON response from API route ${path}.`);
   }
 }
 
@@ -55,35 +70,40 @@ async function authHeaders() {
 }
 
 export async function healthCheck() {
-  const response = await apiFetch("/health");
+  const path = "/health";
+  const response = await apiFetch(path);
+  const payload = await parseJson(response, path);
   if (!response.ok) {
-    throw new Error("Unable to reach API.");
+    throw new Error(payload.detail || "Unable to reach API.");
   }
-  return response.json();
+  return payload;
 }
 
 export async function listProofs() {
+  const path = "/proofs";
   const headers = await authHeaders();
-  const response = await apiFetch("/proofs", { headers });
+  const response = await apiFetch(path, { headers });
+  const payload = await parseJson(response, path);
   if (!response.ok) {
-    throw new Error("Failed to load integrity proofs.");
+    throw new Error(payload.detail || "Failed to load integrity proofs.");
   }
-  return response.json();
+  return payload;
 }
 
 export async function verifyProof(verificationId, file) {
+  const path = `/proofs/${verificationId}/verify`;
   const headers = await authHeaders();
   const formData = new FormData();
   if (file) {
     formData.append("file", file);
   }
 
-  const response = await apiFetch(`/proofs/${verificationId}/verify`, {
+  const response = await apiFetch(path, {
     method: "POST",
     headers,
     body: formData
   });
-  const payload = await parseJson(response);
+  const payload = await parseJson(response, path);
   if (!response.ok) {
     throw new Error(payload.detail || "Verification request failed.");
   }
@@ -135,9 +155,10 @@ export async function uploadProof(file, onProgress) {
 }
 
 export async function getMyProfile() {
+  const path = "/profile/me";
   const headers = await authHeaders();
-  const response = await apiFetch("/profile/me", { headers });
-  const payload = await parseJson(response);
+  const response = await apiFetch(path, { headers });
+  const payload = await parseJson(response, path);
   if (!response.ok) {
     throw new Error(payload.detail || "Failed to load profile.");
   }
@@ -145,14 +166,15 @@ export async function getMyProfile() {
 }
 
 export async function updateMyProfile(updates) {
+  const path = "/profile/me";
   const headers = await authHeaders();
   headers["Content-Type"] = "application/json";
-  const response = await apiFetch("/profile/me", {
+  const response = await apiFetch(path, {
     method: "PUT",
     headers,
     body: JSON.stringify(updates)
   });
-  const payload = await parseJson(response);
+  const payload = await parseJson(response, path);
   if (!response.ok) {
     throw new Error(payload.detail || "Failed to update profile.");
   }
@@ -160,12 +182,13 @@ export async function updateMyProfile(updates) {
 }
 
 export async function createShareLink(verificationId) {
+  const path = `/proofs/${verificationId}/share`;
   const headers = await authHeaders();
-  const response = await apiFetch(`/proofs/${verificationId}/share`, {
+  const response = await apiFetch(path, {
     method: "POST",
     headers
   });
-  const payload = await parseJson(response);
+  const payload = await parseJson(response, path);
   if (!response.ok) {
     throw new Error(payload.detail || "Failed to create share link.");
   }
@@ -173,8 +196,9 @@ export async function createShareLink(verificationId) {
 }
 
 export async function getSharedProof(shareToken) {
-  const response = await apiFetch(`/shared/${encodeURIComponent(shareToken)}`);
-  const payload = await parseJson(response);
+  const path = `/shared/${encodeURIComponent(shareToken)}`;
+  const response = await apiFetch(path);
+  const payload = await parseJson(response, path);
   if (!response.ok) {
     throw new Error(payload.detail || "Shared proof not found.");
   }
@@ -182,16 +206,17 @@ export async function getSharedProof(shareToken) {
 }
 
 export async function verifySharedUpload(shareToken, file) {
+  const path = `/shared/${encodeURIComponent(shareToken)}/verify-upload`;
   const headers = await authHeaders();
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await apiFetch(`/shared/${encodeURIComponent(shareToken)}/verify-upload`, {
+  const response = await apiFetch(path, {
     method: "POST",
     headers,
     body: formData
   });
-  const payload = await parseJson(response);
+  const payload = await parseJson(response, path);
   if (!response.ok) {
     throw new Error(payload.detail || "Shared verification failed.");
   }
@@ -199,9 +224,10 @@ export async function verifySharedUpload(shareToken, file) {
 }
 
 export async function listNotifications() {
+  const path = "/notifications";
   const headers = await authHeaders();
-  const response = await apiFetch("/notifications", { headers });
-  const payload = await parseJson(response);
+  const response = await apiFetch(path, { headers });
+  const payload = await parseJson(response, path);
   if (!response.ok) {
     throw new Error(payload.detail || "Failed to load notifications.");
   }
@@ -209,12 +235,13 @@ export async function listNotifications() {
 }
 
 export async function markNotificationRead(notificationId) {
+  const path = `/notifications/${notificationId}/read`;
   const headers = await authHeaders();
-  const response = await apiFetch(`/notifications/${notificationId}/read`, {
+  const response = await apiFetch(path, {
     method: "POST",
     headers
   });
-  const payload = await parseJson(response);
+  const payload = await parseJson(response, path);
   if (!response.ok) {
     throw new Error(payload.detail || "Failed to update notification.");
   }
@@ -222,12 +249,13 @@ export async function markNotificationRead(notificationId) {
 }
 
 export async function deleteProof(verificationId) {
+  const path = `/proofs/${verificationId}`;
   const headers = await authHeaders();
-  const response = await apiFetch(`/proofs/${verificationId}`, {
+  const response = await apiFetch(path, {
     method: "DELETE",
     headers
   });
-  const payload = await parseJson(response);
+  const payload = await parseJson(response, path);
   if (!response.ok) {
     throw new Error(payload.detail || "Failed to delete proof.");
   }
