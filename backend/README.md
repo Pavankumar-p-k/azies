@@ -19,7 +19,7 @@ FastAPI service for post-quantum file integrity proofs.
 pip install -r requirements.txt
 ```
 
-3. Copy `.env.example` to `.env` and set your Supabase values.
+3. Configure root `.env` (one level above `backend/`) and set your Supabase values.
 4. Run:
 
 ```bash

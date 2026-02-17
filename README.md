@@ -21,8 +21,8 @@ docs/      Supabase schema and deployment notes
 ### 1) Backend
 
 ```bash
-cd backend
 cp .env.example .env
+cd backend
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
@@ -31,7 +31,6 @@ uvicorn main:app --reload --port 8000
 
 ```bash
 cd frontend
-cp .env.example .env
 npm install
 npm run dev
 ```
@@ -40,9 +39,7 @@ npm run dev
 
 1. Open Supabase SQL editor.
 2. Execute `docs/supabase_schema.sql`.
-3. Copy project URL and anon key into:
-   - `backend/.env`
-   - `frontend/.env`
+3. Set all keys once in root `.env` (same directory as this `README.md`).
 
 ## Production Path
 

@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Set variables in `.env` (copy from `.env.example`) before running.
+Set variables in the repository root `.env` file before running.
 
 ## Deploy on Vercel
 
