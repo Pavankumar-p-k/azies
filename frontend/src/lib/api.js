@@ -23,6 +23,14 @@ const API_BASE_URL = normalizeBaseUrl(
   import.meta.env.VITE_API_BASE_URL || inferApiBaseUrl()
 );
 
+function usingInferredSameOriginApi() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const inferred = normalizeBaseUrl(`${window.location.origin}/api/v1`);
+  return normalizeBaseUrl(API_BASE_URL) === inferred;
+}
+
 function networkError() {
   return new Error(
     `Unable to reach API at ${API_BASE_URL}. Check backend status, CORS origins, and VITE_API_BASE_URL.`
@@ -45,6 +53,14 @@ function apiHtmlResponseError(path) {
 
 async function parseJson(response, path) {
   const raw = await response.text();
+  const contentType = (response.headers.get("content-type") || "").toLowerCase();
+
+  if (usingInferredSameOriginApi() && (response.status === 404 || response.status === 405)) {
+    throw new Error(
+      `No backend API found at ${API_BASE_URL}${path}. Configure VITE_API_BASE_URL to your deployed FastAPI base URL (ending in /api/v1).`
+    );
+  }
+
   if (!raw) {
     return {};
   }
@@ -56,7 +72,16 @@ async function parseJson(response, path) {
     if (probe.startsWith("<!doctype") || probe.startsWith("<html")) {
       throw apiHtmlResponseError(path);
     }
-    throw new Error(`Invalid JSON response from API route ${path}.`);
+    if (!response.ok) {
+      return {
+        detail:
+          raw.trim().slice(0, 220) ||
+          `API request failed with status ${response.status}.`
+      };
+    }
+    throw new Error(
+      `API route ${path} returned non-JSON content (${contentType || "unknown"}).`
+    );
   }
 }
 
