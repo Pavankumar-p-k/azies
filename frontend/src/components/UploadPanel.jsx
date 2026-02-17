@@ -96,17 +96,17 @@ export default function UploadPanel({ onUploaded }) {
             Proof generated
           </p>
           <dl className="space-y-1 text-xs text-zinc-200">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-1 sm:grid-cols-3 sm:gap-2">
               <dt className="text-zinc-400">File</dt>
-              <dd className="col-span-2 break-all">{result.filename}</dd>
+              <dd className="break-all sm:col-span-2">{result.filename}</dd>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-1 sm:grid-cols-3 sm:gap-2">
               <dt className="text-zinc-400">Verification ID</dt>
-              <dd className="col-span-2 font-mono break-all">{result.verification_id}</dd>
+              <dd className="font-mono break-all sm:col-span-2">{result.verification_id}</dd>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-1 sm:grid-cols-3 sm:gap-2">
               <dt className="text-zinc-400">Hash</dt>
-              <dd className="col-span-2 font-mono break-all">{result.hash_sha3_512}</dd>
+              <dd className="font-mono break-all sm:col-span-2">{result.hash_sha3_512}</dd>
             </div>
           </dl>
         </div>

@@ -9,6 +9,12 @@
   --font-body: "Space Grotesk", "Segoe UI", sans-serif;
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -18,6 +24,7 @@ body {
   font-family: var(--font-body);
   background: #06110d;
   color: #f6f8f7;
+  overflow-x: hidden;
 }
 
 h1,
@@ -41,7 +48,7 @@ h3 {
 
 @layer components {
   .panel {
-    @apply rounded-2xl border border-emerald-300/20 bg-terminal-elev/80 p-5 shadow-panel backdrop-blur-sm;
+    @apply rounded-2xl border border-emerald-300/20 bg-terminal-elev/80 p-4 shadow-panel backdrop-blur-sm sm:p-5;
   }
 
   .panel-title {

@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { LogIn, LogOut, UserPlus } from "lucide-react";
+import { Eye, EyeOff, LogIn, LogOut, UserPlus } from "lucide-react";
 
 import { isSupabaseEnabled, supabase } from "../lib/supabase";
 
 export default function AuthPanel({ user, onUserUpdate }) {
   const [email, setEmail] = useState("pavankumarunnam99@gmail.com");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
 
@@ -95,13 +96,23 @@ export default function AuthPanel({ user, onUserUpdate }) {
             onChange={(event) => setEmail(event.target.value)}
             placeholder="Email"
           />
-          <input
-            type="password"
-            className="input"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Password"
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              className="input pr-20"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Password"
+            />
+            <button
+              type="button"
+              className="absolute inset-y-0 right-2 my-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-zinc-300 hover:text-neon-green"
+              onClick={() => setShowPassword((previous) => !previous)}
+            >
+              {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              <span>{showPassword ? "Hide" : "Show"}</span>
+            </button>
+          </div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
             <button className="btn-primary" onClick={handleSignIn} disabled={busy}>
               <LogIn className="h-4 w-4" />

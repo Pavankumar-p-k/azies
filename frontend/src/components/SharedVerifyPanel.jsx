@@ -71,7 +71,7 @@ export default function SharedVerifyPanel({ shareToken }) {
           <p className="text-zinc-100">
             <span className="text-zinc-400">File:</span> {proof.filename}
           </p>
-          <p className="text-zinc-100">
+          <p className="break-all text-zinc-100">
             <span className="text-zinc-400">Verification ID:</span> {proof.verification_id}
           </p>
           <p className="text-zinc-100">
@@ -91,10 +91,10 @@ export default function SharedVerifyPanel({ shareToken }) {
           className="hidden"
           onChange={(event) => setFileName(event.target.files?.[0]?.name ?? "")}
         />
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
           <button
             type="button"
-            className="btn-secondary"
+            className="btn-secondary w-full sm:w-auto"
             onClick={() => fileInputRef.current?.click()}
             disabled={busy}
           >
@@ -102,7 +102,12 @@ export default function SharedVerifyPanel({ shareToken }) {
           </button>
           <span className="text-xs text-zinc-400">{fileName || "No file selected"}</span>
         </div>
-        <button type="button" className="btn-primary" onClick={onVerify} disabled={busy || !proof}>
+        <button
+          type="button"
+          className="btn-primary w-full sm:w-auto"
+          onClick={onVerify}
+          disabled={busy || !proof}
+        >
           <Upload className="h-4 w-4" />
           <span>{busy ? "Verifying..." : "Verify Against Shared Proof"}</span>
         </button>

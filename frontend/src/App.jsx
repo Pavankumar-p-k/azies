@@ -193,10 +193,10 @@ export default function App() {
 
   if (shareToken) {
     return (
-      <main className="relative min-h-screen overflow-hidden bg-terminal-bg px-4 py-8 text-zinc-100 md:px-8">
+      <main className="relative min-h-screen overflow-hidden bg-terminal-bg px-3 py-6 text-zinc-100 sm:px-4 sm:py-8 md:px-8">
         <div className="aurora" />
-        <section className="mx-auto grid max-w-4xl gap-6">
-          <header className="panel flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <section className="mx-auto grid max-w-4xl gap-4 sm:gap-6">
+          <header className="panel flex flex-col items-start gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.25em] text-neon-green">
                 <Shield className="h-4 w-4" />
@@ -205,7 +205,7 @@ export default function App() {
               <h1 className="mt-2 text-2xl font-bold md:text-3xl">Verify Shared Integrity Link</h1>
               <p className="mt-1 text-sm text-zinc-300">{heroStatus}</p>
             </div>
-            <button className="btn-secondary" onClick={clearShareMode}>
+            <button className="btn-secondary w-full sm:w-auto" onClick={clearShareMode}>
               Exit Shared View
             </button>
           </header>
@@ -217,10 +217,10 @@ export default function App() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-terminal-bg px-4 py-8 text-zinc-100 md:px-8">
+    <main className="relative min-h-screen overflow-hidden bg-terminal-bg px-3 py-6 text-zinc-100 sm:px-4 sm:py-8 md:px-8">
       <div className="aurora" />
-      <section className="mx-auto grid max-w-7xl gap-6">
-        <header className="panel flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <section className="mx-auto grid max-w-7xl gap-4 sm:gap-6">
+        <header className="panel flex flex-col items-start gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.25em] text-neon-green">
               <Shield className="h-4 w-4" />
@@ -231,14 +231,18 @@ export default function App() {
             </h1>
             <p className="mt-1 text-sm text-zinc-300">{heroStatus}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="rounded-2xl border border-emerald-300/20 bg-black/30 px-4 py-3">
+          <div className="flex w-full flex-wrap items-stretch gap-2 md:w-auto md:items-center md:justify-end">
+            <div className="w-full rounded-2xl border border-emerald-300/20 bg-black/30 px-4 py-3 sm:w-auto">
               <p className="inline-flex items-center gap-2 text-xs text-zinc-300">
                 <TerminalSquare className="h-4 w-4 text-neon-green" />
                 Live Node Status: {socketState}
               </p>
             </div>
-            <button type="button" className="btn-secondary relative" onClick={openNotificationsPanel}>
+            <button
+              type="button"
+              className="btn-secondary relative w-full sm:w-auto"
+              onClick={openNotificationsPanel}
+            >
               <Bell className="h-4 w-4" />
               <span>Notify</span>
               {user && unreadCount > 0 ? (
@@ -247,7 +251,7 @@ export default function App() {
                 </span>
               ) : null}
             </button>
-            <button type="button" className="btn-secondary" onClick={openUserPanel}>
+            <button type="button" className="btn-secondary w-full sm:w-auto" onClick={openUserPanel}>
               <UserRound className="h-4 w-4" />
               <span>{user ? "Creator Panel" : "Sign In"}</span>
             </button>
@@ -271,8 +275,8 @@ export default function App() {
       </section>
 
       {showUserPanel ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-3 py-3 md:items-start md:px-4 md:py-8">
-          <div className="w-full max-w-xl space-y-4 rounded-2xl border border-emerald-300/20 bg-terminal-elev/95 p-4 shadow-panel md:max-h-[92vh] md:overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-2 py-2 sm:px-3 sm:py-3 md:items-start md:px-4 md:py-8">
+          <div className="max-h-[92vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-2xl border border-emerald-300/20 bg-terminal-elev/95 p-4 shadow-panel sm:p-5">
             <div className="flex items-center justify-between">
               <p className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-zinc-400">
                 <UserRound className="h-4 w-4 text-neon-green" />
@@ -307,8 +311,8 @@ export default function App() {
       ) : null}
 
       {showNotificationsPanel ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-3 py-3 md:items-start md:px-4 md:py-8">
-          <div className="w-full max-w-xl space-y-4 rounded-2xl border border-emerald-300/20 bg-terminal-elev/95 p-4 shadow-panel md:max-h-[92vh] md:overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-2 py-2 sm:px-3 sm:py-3 md:items-start md:px-4 md:py-8">
+          <div className="max-h-[92vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-2xl border border-emerald-300/20 bg-terminal-elev/95 p-4 shadow-panel sm:p-5">
             <div className="flex items-center justify-between">
               <p className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-zinc-400">
                 <Bell className="h-4 w-4 text-neon-green" />

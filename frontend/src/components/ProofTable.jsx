@@ -132,6 +132,65 @@ export default function ProofTable({ proofs, onRefresh, user }) {
     }
   }
 
+  function isRowBusy(row) {
+    return (
+      busyId === row.verification_id ||
+      actionBusyId === `share:${row.verification_id}` ||
+      actionBusyId === `delete:${row.verification_id}`
+    );
+  }
+
+  function renderRowActions(row) {
+    const busy = isRowBusy(row);
+    const shareUrl = shareLinks[row.verification_id] || fallbackShareUrl(row);
+
+    return (
+      <>
+        <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:flex-wrap">
+          <button
+            className="btn-secondary w-full text-[11px] sm:w-auto"
+            disabled={busy}
+            onClick={() => runVerification(row.verification_id, false)}
+          >
+            Metadata Verify
+          </button>
+          <button
+            className="btn-primary w-full text-[11px] sm:w-auto"
+            disabled={busy}
+            onClick={() => runVerification(row.verification_id, true)}
+          >
+            Tamper Check
+          </button>
+          <button
+            className="btn-secondary w-full text-[11px] sm:w-auto"
+            disabled={!user || busy}
+            onClick={() => handleShare(row)}
+          >
+            <Share2 className="h-3.5 w-3.5" />
+            <span>{actionBusyId === `share:${row.verification_id}` ? "Sharing..." : "Share"}</span>
+          </button>
+          <button
+            className="btn-secondary w-full text-[11px] sm:w-auto"
+            disabled={busy}
+            onClick={() => handleCopyLink(row)}
+          >
+            <Copy className="h-3.5 w-3.5" />
+            <span>Copy Link</span>
+          </button>
+          <button
+            className="btn-secondary w-full text-[11px] sm:w-auto"
+            disabled={!user || busy}
+            onClick={() => handleDelete(row)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>{actionBusyId === `delete:${row.verification_id}` ? "Deleting..." : "Delete"}</span>
+          </button>
+        </div>
+        {shareUrl ? <p className="mt-2 break-all text-[11px] text-zinc-400">{shareUrl}</p> : null}
+      </>
+    );
+  }
+
   return (
     <section className="panel space-y-4">
       <div className="flex items-center justify-between">
@@ -142,7 +201,38 @@ export default function ProofTable({ proofs, onRefresh, user }) {
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-emerald-300/10">
+      <div className="space-y-3 sm:hidden">
+        {tableRows.length === 0 ? (
+          <div className="rounded-xl border border-emerald-300/10 bg-black/20 px-3 py-6 text-center text-xs text-zinc-500">
+            No proofs yet. Upload a file to generate your first quantum signature.
+          </div>
+        ) : (
+          tableRows.map((row) => (
+            <article
+              key={row.verification_id}
+              className="space-y-3 rounded-xl border border-emerald-300/10 bg-black/20 p-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="break-all text-sm text-zinc-200">{row.filename}</p>
+                <StatusBadge status={row.status} />
+              </div>
+              <div className="space-y-1 text-[11px] text-zinc-400">
+                <p className="break-all">
+                  <span className="text-zinc-500">Verification ID:</span>{" "}
+                  <span className="font-mono text-zinc-300">{row.verification_id}</span>
+                </p>
+                <p>
+                  <span className="text-zinc-500">Created:</span>{" "}
+                  <span className="text-zinc-300">{new Date(row.created_at).toLocaleString()}</span>
+                </p>
+              </div>
+              {renderRowActions(row)}
+            </article>
+          ))
+        )}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-xl border border-emerald-300/10 sm:block">
         <table className="min-w-full text-left text-xs text-zinc-300">
           <thead className="bg-zinc-900/70 text-[11px] uppercase tracking-widest text-zinc-400">
             <tr>
@@ -163,89 +253,13 @@ export default function ProofTable({ proofs, onRefresh, user }) {
             ) : (
               tableRows.map((row) => (
                 <tr key={row.verification_id} className="border-t border-zinc-800">
-                  <td className="px-3 py-3">{row.filename}</td>
-                  <td className="px-3 py-3 font-mono">{row.verification_id}</td>
+                  <td className="px-3 py-3 break-all">{row.filename}</td>
+                  <td className="px-3 py-3 break-all font-mono">{row.verification_id}</td>
                   <td className="px-3 py-3">
                     <StatusBadge status={row.status} />
                   </td>
                   <td className="px-3 py-3">{new Date(row.created_at).toLocaleString()}</td>
-                  <td className="px-3 py-3">
-                    <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:flex-wrap">
-                      <button
-                        className="btn-secondary w-full text-[11px] sm:w-auto"
-                        disabled={
-                          busyId === row.verification_id ||
-                          actionBusyId === `share:${row.verification_id}` ||
-                          actionBusyId === `delete:${row.verification_id}`
-                        }
-                        onClick={() => runVerification(row.verification_id, false)}
-                      >
-                        Metadata Verify
-                      </button>
-                      <button
-                        className="btn-primary w-full text-[11px] sm:w-auto"
-                        disabled={
-                          busyId === row.verification_id ||
-                          actionBusyId === `share:${row.verification_id}` ||
-                          actionBusyId === `delete:${row.verification_id}`
-                        }
-                        onClick={() => runVerification(row.verification_id, true)}
-                      >
-                        Tamper Check
-                      </button>
-                      <button
-                        className="btn-secondary w-full text-[11px] sm:w-auto"
-                        disabled={
-                          !user ||
-                          busyId === row.verification_id ||
-                          actionBusyId === `share:${row.verification_id}` ||
-                          actionBusyId === `delete:${row.verification_id}`
-                        }
-                        onClick={() => handleShare(row)}
-                      >
-                        <Share2 className="h-3.5 w-3.5" />
-                        <span>
-                          {actionBusyId === `share:${row.verification_id}`
-                            ? "Sharing..."
-                            : "Share"}
-                        </span>
-                      </button>
-                      <button
-                        className="btn-secondary w-full text-[11px] sm:w-auto"
-                        disabled={
-                          busyId === row.verification_id ||
-                          actionBusyId === `share:${row.verification_id}` ||
-                          actionBusyId === `delete:${row.verification_id}`
-                        }
-                        onClick={() => handleCopyLink(row)}
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                        <span>Copy Link</span>
-                      </button>
-                      <button
-                        className="btn-secondary w-full text-[11px] sm:w-auto"
-                        disabled={
-                          !user ||
-                          busyId === row.verification_id ||
-                          actionBusyId === `share:${row.verification_id}` ||
-                          actionBusyId === `delete:${row.verification_id}`
-                        }
-                        onClick={() => handleDelete(row)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        <span>
-                          {actionBusyId === `delete:${row.verification_id}`
-                            ? "Deleting..."
-                            : "Delete"}
-                        </span>
-                      </button>
-                    </div>
-                    {(shareLinks[row.verification_id] || fallbackShareUrl(row)) && (
-                      <p className="mt-2 break-all text-[11px] text-zinc-400">
-                        {shareLinks[row.verification_id] || fallbackShareUrl(row)}
-                      </p>
-                    )}
-                  </td>
+                  <td className="px-3 py-3">{renderRowActions(row)}</td>
                 </tr>
               ))
             )}
@@ -265,15 +279,15 @@ export default function ProofTable({ proofs, onRefresh, user }) {
             setSelectedFileName(file?.name ?? "");
           }}
         />
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
           <button
             type="button"
-            className="btn-secondary text-[11px]"
+            className="btn-secondary w-full text-[11px] sm:w-auto"
             onClick={() => filePickerRef.current?.click()}
           >
             Choose file
           </button>
-          <span className="text-xs text-zinc-400">
+          <span className="break-all text-xs text-zinc-400">
             {selectedFileName || "No file selected"}
           </span>
         </div>
