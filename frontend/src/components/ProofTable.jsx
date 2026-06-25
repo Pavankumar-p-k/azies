@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from "react";
-import { CheckCircle2, Copy, FileSearch, Share2, ShieldX, Trash2 } from "lucide-react";
 
 import { createShareLink, deleteProof, verifyProof } from "../lib/api";
 
@@ -192,134 +191,64 @@ export default function ProofTable({ proofs, onRefresh, user }) {
   }
 
   return (
-    <section className="panel space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="panel-title">Integrity Ledger</h2>
-        <button className="btn-secondary" onClick={onRefresh}>
-          <FileSearch className="h-4 w-4" />
-          <span>Refresh</span>
+    <section>
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-xs text-zinc-500">Proofs</p>
+        <button className="text-xs text-zinc-600 hover:text-zinc-300" onClick={onRefresh}>Refresh</button>
+      </div>
+
+      {tableRows.length === 0 ? (
+        <p className="text-sm text-zinc-600">No proofs yet.</p>
+      ) : (
+        <div className="space-y-1">
+          {tableRows.map((row) => (
+            <div key={row.verification_id} className="border-t border-zinc-800/50 py-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-zinc-200">{row.filename}</p>
+                  <p className="mt-0.5 truncate font-mono text-xs text-zinc-600">{row.verification_id}</p>
+                </div>
+                <StatusBadge status={row.status} />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button className="rounded bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-700" onClick={() => runVerification(row.verification_id, false)} disabled={busyId === row.verification_id}>
+                  Verify
+                </button>
+                <button className="rounded bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-700" onClick={() => runVerification(row.verification_id, true)} disabled={busyId === row.verification_id}>
+                  Check
+                </button>
+                <button className="rounded bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-700" onClick={() => handleShare(row)} disabled={!user || actionBusyId === `share:${row.verification_id}`}>
+                  Share
+                </button>
+                <button className="rounded bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-700" onClick={() => handleDelete(row)} disabled={actionBusyId === `delete:${row.verification_id}`}>
+                  Delete
+                </button>
+              </div>
+              {shareLinks[row.verification_id] ? (
+                <p className="mt-1 truncate text-xs text-zinc-600">{shareLinks[row.verification_id]}</p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-4 flex items-center gap-3 border-t border-zinc-800/50 pt-4">
+        <p className="text-xs text-zinc-600">Check file:</p>
+        <input ref={filePickerRef} type="file" className="hidden" onChange={(event) => { const f = event.target.files?.[0] ?? null; selectedFileRef.current = f; setSelectedFileName(f?.name ?? ""); }} />
+        <button className="rounded bg-neon-green px-2.5 py-1 text-xs font-medium text-zinc-900 hover:brightness-110" onClick={() => filePickerRef.current?.click()}>
+          {selectedFileName || "Choose"}
         </button>
       </div>
 
-      <div className="space-y-3 sm:hidden">
-        {tableRows.length === 0 ? (
-          <div className="rounded-xl border border-emerald-300/10 bg-black/20 px-3 py-6 text-center text-xs text-zinc-500">
-            No proofs yet. Upload a file to generate your first quantum signature.
-          </div>
-        ) : (
-          tableRows.map((row) => (
-            <article
-              key={row.verification_id}
-              className="space-y-3 rounded-xl border border-emerald-300/10 bg-black/20 p-3"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <p className="break-all text-sm text-zinc-200">{row.filename}</p>
-                <StatusBadge status={row.status} />
-              </div>
-              <div className="space-y-1 text-[11px] text-zinc-400">
-                <p className="break-all">
-                  <span className="text-zinc-500">Verification ID:</span>{" "}
-                  <span className="font-mono text-zinc-300">{row.verification_id}</span>
-                </p>
-                <p>
-                  <span className="text-zinc-500">Created:</span>{" "}
-                  <span className="text-zinc-300">{new Date(row.created_at).toLocaleString()}</span>
-                </p>
-              </div>
-              {renderRowActions(row)}
-            </article>
-          ))
-        )}
-      </div>
-
-      <div className="hidden overflow-x-auto rounded-xl border border-emerald-300/10 sm:block">
-        <table className="min-w-full text-left text-xs text-zinc-300">
-          <thead className="bg-zinc-900/70 text-[11px] uppercase tracking-widest text-zinc-400">
-            <tr>
-              <th className="px-3 py-3">File</th>
-              <th className="px-3 py-3">Verification ID</th>
-              <th className="px-3 py-3">Status</th>
-              <th className="px-3 py-3">Created</th>
-              <th className="px-3 py-3">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tableRows.length === 0 ? (
-              <tr>
-                <td className="px-3 py-6 text-center text-zinc-500" colSpan={5}>
-                  No proofs yet. Upload a file to generate your first quantum signature.
-                </td>
-              </tr>
-            ) : (
-              tableRows.map((row) => (
-                <tr key={row.verification_id} className="border-t border-zinc-800">
-                  <td className="px-3 py-3 break-all">{row.filename}</td>
-                  <td className="px-3 py-3 break-all font-mono">{row.verification_id}</td>
-                  <td className="px-3 py-3">
-                    <StatusBadge status={row.status} />
-                  </td>
-                  <td className="px-3 py-3">{new Date(row.created_at).toLocaleString()}</td>
-                  <td className="px-3 py-3">{renderRowActions(row)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-xs text-zinc-300">Optional file for tamper check</p>
-        <input
-          ref={filePickerRef}
-          type="file"
-          className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0] ?? null;
-            selectedFileRef.current = file;
-            setSelectedFileName(file?.name ?? "");
-          }}
-        />
-        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-          <button
-            type="button"
-            className="btn-secondary w-full text-[11px] sm:w-auto"
-            onClick={() => filePickerRef.current?.click()}
-          >
-            Choose file
-          </button>
-          <span className="break-all text-xs text-zinc-400">
-            {selectedFileName || "No file selected"}
-          </span>
-        </div>
-      </div>
-
       {verifyResult ? (
-        <div
-          className={`rounded-xl border p-3 text-xs ${
-            verifyResult.status === "VERIFIED"
-              ? "border-emerald-400/30 bg-emerald-500/10 text-neon-green"
-              : "border-red-400/30 bg-red-500/10 text-neon-red"
-          }`}
-        >
-          <p className="mb-1 inline-flex items-center gap-2 font-semibold">
-            {verifyResult.status === "VERIFIED" ? (
-              <CheckCircle2 className="h-4 w-4" />
-            ) : (
-              <ShieldX className="h-4 w-4" />
-            )}
-            {verifyResult.status}
-          </p>
-          <p>{verifyResult.detail}</p>
-        </div>
-      ) : null}
-
-      {error ? <p className="text-xs text-neon-red">{error}</p> : null}
-      {status ? <p className="text-xs text-zinc-300">{status}</p> : null}
-      {!user ? (
-        <p className="text-[11px] text-zinc-500">
-          Sign in to create or delete shareable proofs.
+        <p className={`mt-3 text-xs ${verifyResult.status === "VERIFIED" ? "text-neon-green" : "text-neon-red"}`}>
+          {verifyResult.status} — {verifyResult.detail}
         </p>
       ) : null}
+
+      {error ? <p className="mt-3 text-xs text-neon-red">{error}</p> : null}
+      {status ? <p className="mt-3 text-xs text-zinc-500">{status}</p> : null}
+      {!user ? <p className="mt-4 text-xs text-zinc-600">Sign in to share and delete.</p> : null}
     </section>
   );
 }

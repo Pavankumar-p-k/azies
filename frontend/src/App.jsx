@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { Bell, LogOut, Shield, TerminalSquare, UserRound, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Bell, LogOut, Shield, X } from "lucide-react";
 
+import AboutPage from "./components/AboutPage";
 import AuthPanel from "./components/AuthPanel";
 import LiveFeed from "./components/LiveFeed";
 import NotificationsPanel from "./components/NotificationsPanel";
@@ -29,8 +30,10 @@ export default function App() {
   const [shareToken, setShareToken] = useState(readShareToken);
   const [showUserPanel, setShowUserPanel] = useState(false);
   const [showNotificationsPanel, setShowNotificationsPanel] = useState(false);
+  const [showAbout, setShowAbout] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const { socketState, events } = useProofSocket();
+  const dashboardRef = useRef(null);
 
   async function loadHealth() {
     try {
@@ -130,6 +133,11 @@ export default function App() {
     return `Engine: ${pqc} via ${backend}`;
   }, [health]);
 
+  function handleGetStarted() {
+    setShowAbout(false);
+    setTimeout(() => dashboardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+  }
+
   function clearShareMode() {
     if (typeof window === "undefined") {
       setShareToken("");
@@ -217,92 +225,70 @@ export default function App() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-terminal-bg px-3 py-6 text-zinc-100 sm:px-4 sm:py-8 md:px-8">
-      <div className="aurora" />
-      <section className="mx-auto grid max-w-7xl gap-4 sm:gap-6">
-        <header className="panel flex flex-col items-start gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.25em] text-neon-green">
-              <Shield className="h-4 w-4" />
-              Project Aegis
-            </p>
-            <h1 className="mt-2 text-2xl font-bold md:text-4xl">
-              Quantum-Resistant Integrity Command Center
-            </h1>
-            <p className="mt-1 text-sm text-zinc-300">{heroStatus}</p>
-          </div>
-          <div className="flex w-full flex-wrap items-stretch gap-2 md:w-auto md:items-center md:justify-end">
-            <div className="w-full rounded-2xl border border-emerald-300/20 bg-black/30 px-4 py-3 sm:w-auto">
-              <p className="inline-flex items-center gap-2 text-xs text-zinc-300">
-                <TerminalSquare className="h-4 w-4 text-neon-green" />
-                Live Node Status: {socketState}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="btn-secondary relative w-full sm:w-auto"
-              onClick={openNotificationsPanel}
-            >
+    <main className="min-h-screen bg-terminal-bg text-zinc-100">
+      <nav className="sticky top-0 z-40 bg-terminal-bg/90 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
+          <button className="flex items-center gap-2" onClick={() => setShowAbout(!showAbout)}>
+            <Shield className="h-4 w-4 text-neon-green" />
+            <span className="text-sm text-zinc-300">Project Aegis</span>
+          </button>
+          <div className="flex items-center gap-4">
+            <button type="button" className="text-xs text-zinc-600 hover:text-zinc-300" onClick={() => setShowAbout(!showAbout)}>
+              {showAbout ? "Dashboard" : "About"}
+            </button>
+            <span className="text-xs text-zinc-700">{socketState}</span>
+            <button type="button" className="relative text-zinc-600 hover:text-zinc-300" onClick={openNotificationsPanel}>
               <Bell className="h-4 w-4" />
-              <span>Notify</span>
               {user && unreadCount > 0 ? (
-                <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-neon-red px-1 text-center text-[10px] text-white">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
+                <span className="absolute -right-1.5 -top-1.5 flex h-3 w-3 items-center justify-center rounded-full bg-neon-red text-[7px] text-white">{unreadCount > 9 ? "9+" : unreadCount}</span>
               ) : null}
             </button>
-            <button type="button" className="btn-secondary w-full sm:w-auto" onClick={openUserPanel}>
-              <UserRound className="h-4 w-4" />
-              <span>{user ? "Creator Panel" : "Sign In"}</span>
+            <button type="button" className="text-xs text-zinc-600 hover:text-zinc-300" onClick={openUserPanel}>
+              {user ? "Dashboard" : "Sign In"}
             </button>
           </div>
-        </header>
-
-        {error ? (
-          <p className="rounded-xl border border-red-300/20 bg-red-500/10 p-3 text-xs text-neon-red">
-            {error}
-          </p>
-        ) : null}
-
-        <section className="grid gap-6 lg:grid-cols-[1.2fr]">
-          <UploadPanel onUploaded={loadProofs} />
-        </section>
-
-        <section id="integrity-ledger" className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
-          <ProofTable proofs={proofs} onRefresh={loadProofs} user={user} />
-          <LiveFeed socketState={socketState} events={events} />
-        </section>
-      </section>
-
-      {showUserPanel ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-2 py-2 sm:px-3 sm:py-3 md:items-start md:px-4 md:py-8">
-          <div className="max-h-[92vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-2xl border border-emerald-300/20 bg-terminal-elev/95 p-4 shadow-panel sm:p-5">
-            <div className="flex items-center justify-between">
-              <p className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-zinc-400">
-                <UserRound className="h-4 w-4 text-neon-green" />
-                User Controls
-              </p>
-              <button type="button" className="btn-secondary" onClick={closeUserPanel}>
-                <X className="h-4 w-4" />
-                <span>Close</span>
-              </button>
+        </div>
+      </nav>
+      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-16">
+        {showAbout ? (
+          <AboutPage health={health} heroStatus={heroStatus} onGetStarted={handleGetStarted} />
+        ) : (
+          <div ref={dashboardRef} className="space-y-16">
+            <div>
+              <h1 className="text-lg text-zinc-400 sm:text-xl">Dashboard</h1>
+              <p className="mt-1 text-sm text-zinc-600">{heroStatus}</p>
             </div>
 
+            {error ? <p className="text-sm text-neon-red">{error}</p> : null}
+
+            <section>
+              <UploadPanel onUploaded={loadProofs} />
+            </section>
+
+            <section id="integrity-ledger" className="grid gap-12 lg:grid-cols-[1.5fr_1fr]">
+              <ProofTable proofs={proofs} onRefresh={loadProofs} user={user} />
+              <LiveFeed socketState={socketState} events={events} />
+            </section>
+          </div>
+        )}
+      </div>
+
+      {showUserPanel ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-lg bg-terminal-elev p-6">
+            <div className="mb-6 flex items-center justify-between">
+              <p className="text-xs text-zinc-500">Account</p>
+              <button type="button" className="text-zinc-600 hover:text-zinc-300" onClick={closeUserPanel}>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
             {user ? (
-              <>
-                <ProfilePanel
-                  user={user}
-                  proofsCount={proofs.length}
-                  onPostsClick={goToPostsPanel}
-                  onSaved={handleProfileSaved}
-                  initialProfile={profileCache}
-                  onProfileLoaded={handleProfileLoaded}
-                />
-                <button type="button" className="btn-secondary w-full" onClick={handleSignOut}>
-                  <LogOut className="h-4 w-4" />
-                  <span>Sign Out</span>
+              <div className="space-y-5">
+                <ProfilePanel user={user} proofsCount={proofs.length} onPostsClick={goToPostsPanel} onSaved={handleProfileSaved} initialProfile={profileCache} onProfileLoaded={handleProfileLoaded} />
+                <button type="button" className="w-full rounded bg-zinc-900 px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300" onClick={handleSignOut}>
+                  Sign Out
                 </button>
-              </>
+              </div>
             ) : (
               <AuthPanel user={user} onUserUpdate={setUser} />
             )}
@@ -311,23 +297,15 @@ export default function App() {
       ) : null}
 
       {showNotificationsPanel ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-2 py-2 sm:px-3 sm:py-3 md:items-start md:px-4 md:py-8">
-          <div className="max-h-[92vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-2xl border border-emerald-300/20 bg-terminal-elev/95 p-4 shadow-panel sm:p-5">
-            <div className="flex items-center justify-between">
-              <p className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-zinc-400">
-                <Bell className="h-4 w-4 text-neon-green" />
-                Notifications
-              </p>
-              <button type="button" className="btn-secondary" onClick={closeNotificationsPanel}>
-                <X className="h-4 w-4" />
-                <span>Close</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-lg bg-terminal-elev p-6">
+            <div className="mb-6 flex items-center justify-between">
+              <p className="text-xs text-zinc-500">Notifications</p>
+              <button type="button" className="text-zinc-600 hover:text-zinc-300" onClick={closeNotificationsPanel}>
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
-            <NotificationsPanel
-              user={user}
-              embedded
-              onUnreadCountChange={setUnreadCount}
-            />
+            <NotificationsPanel user={user} embedded onUnreadCountChange={setUnreadCount} />
           </div>
         </div>
       ) : null}

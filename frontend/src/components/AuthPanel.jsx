@@ -1,5 +1,4 @@
-import { useMemo, useState } from "react";
-import { Eye, EyeOff, LogIn, LogOut, UserPlus } from "lucide-react";
+import { useState } from "react";
 
 import { isSupabaseEnabled, supabase } from "../lib/supabase";
 
@@ -9,13 +8,6 @@ export default function AuthPanel({ user, onUserUpdate }) {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
-
-  const messageClassName = useMemo(() => {
-    if (status.toLowerCase().includes("failed")) {
-      return "text-neon-red";
-    }
-    return "text-neon-green";
-  }, [status]);
 
   async function handleSignIn() {
     if (!supabase) {
@@ -64,68 +56,41 @@ export default function AuthPanel({ user, onUserUpdate }) {
 
   if (!isSupabaseEnabled) {
     return (
-      <section className="panel">
-        <h2 className="panel-title">Identity Control</h2>
-        <p className="text-sm text-zinc-300">
-          Supabase auth is disabled. Add `VITE_SUPABASE_URL` and
-          `VITE_SUPABASE_ANON_KEY` to enable per-user verification ownership.
-        </p>
-      </section>
+      <div className="space-y-3">
+        <p className="text-xs text-zinc-500">Auth</p>
+        <p className="text-sm text-zinc-600">Supabase not configured.</p>
+      </div>
     );
   }
 
   return (
-    <section className="panel">
-      <h2 className="panel-title">Identity Control</h2>
+    <div className="space-y-4">
       {user ? (
-        <div className="space-y-3">
-          <p className="text-sm text-zinc-200">
-            Active session: <span className="text-neon-green">{user.email}</span>
-          </p>
-          <button className="btn-secondary w-full" onClick={handleSignOut}>
-            <LogOut className="h-4 w-4" />
-            <span>Sign Out</span>
-          </button>
-        </div>
+        <>
+          <p className="text-xs text-zinc-500">Signed in as <span className="text-zinc-300">{user.email}</span></p>
+          <button className="w-full rounded bg-zinc-900 px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300" onClick={handleSignOut}>Sign Out</button>
+        </>
       ) : (
-        <div className="space-y-3">
-          <input
-            type="email"
-            className="input"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="Email"
-          />
+        <>
+          <p className="text-xs text-zinc-500">Sign in</p>
+          <input type="email" className="w-full border-b border-zinc-800 bg-transparent px-0 py-2 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-neon-green" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
           <div className="relative">
-            <input
-              type={showPassword ? "text" : "password"}
-              className="input pr-20"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Password"
-            />
-            <button
-              type="button"
-              className="absolute inset-y-0 right-2 my-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-zinc-300 hover:text-neon-green"
-              onClick={() => setShowPassword((previous) => !previous)}
-            >
-              {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-              <span>{showPassword ? "Hide" : "Show"}</span>
+            <input type={showPassword ? "text" : "password"} className="w-full border-b border-zinc-800 bg-transparent px-0 py-2 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-neon-green" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" />
+            <button type="button" className="absolute right-0 top-1/2 -translate-y-1/2 text-xs text-zinc-600 hover:text-zinc-300" onClick={() => setShowPassword((p) => !p)}>
+              {showPassword ? "Hide" : "Show"}
             </button>
           </div>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            <button className="btn-primary" onClick={handleSignIn} disabled={busy}>
-              <LogIn className="h-4 w-4" />
-              <span>Sign In</span>
+          <div className="flex gap-2">
+            <button className="rounded bg-neon-green px-3 py-1.5 text-xs font-medium text-zinc-900 hover:brightness-110" onClick={handleSignIn} disabled={busy}>
+              {busy ? "..." : "Sign In"}
             </button>
-            <button className="btn-secondary" onClick={handleSignUp} disabled={busy}>
-              <UserPlus className="h-4 w-4" />
-              <span>Sign Up</span>
+            <button className="rounded bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700" onClick={handleSignUp} disabled={busy}>
+              Sign Up
             </button>
           </div>
-        </div>
+        </>
       )}
-      {status ? <p className={`text-xs ${messageClassName}`}>{status}</p> : null}
-    </section>
+      {status ? <p className={`text-xs ${status.toLowerCase().includes("fail") ? "text-neon-red" : "text-neon-green"}`}>{status}</p> : null}
+    </div>
   );
 }

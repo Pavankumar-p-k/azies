@@ -58,91 +58,132 @@ export default function SharedVerifyPanel({ shareToken }) {
   }
 
   return (
-    <section className="panel space-y-4">
-      <h2 className="panel-title">Shared Integrity Verification</h2>
+    <section className="rounded-2xl border border-emerald-300/10 bg-terminal-elev/60 p-5 shadow-panel backdrop-blur-sm sm:p-6">
+      <div className="mb-5 flex items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-300/20 bg-emerald-500/10">
+          <Upload className="h-4 w-4 text-neon-green" />
+        </div>
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-400">Shared Integrity Verification</h2>
+          <p className="text-[10px] text-zinc-600">Verify a file against a shared proof link</p>
+        </div>
+      </div>
 
-      {busy && !proof ? <p className="text-sm text-zinc-400">Loading shared proof...</p> : null}
-
-      {proof ? (
-        <div className="rounded-xl border border-emerald-300/20 bg-black/20 p-4 text-sm">
-          <p className="text-zinc-100">
-            <span className="text-zinc-400">Owner:</span> {proof.owner_display}
-          </p>
-          <p className="text-zinc-100">
-            <span className="text-zinc-400">File:</span> {proof.filename}
-          </p>
-          <p className="break-all text-zinc-100">
-            <span className="text-zinc-400">Verification ID:</span> {proof.verification_id}
-          </p>
-          <p className="text-zinc-100">
-            <span className="text-zinc-400">PQC:</span> {proof.pqc_algorithm}
-          </p>
-          <p className="text-zinc-100">
-            <span className="text-zinc-400">Created:</span>{" "}
-            {new Date(proof.created_at).toLocaleString()}
-          </p>
+      {busy && !proof ? (
+        <div className="flex items-center justify-center rounded-xl border border-zinc-800 bg-black/20 px-4 py-6">
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-neon-green" />
+            <p className="text-xs text-zinc-400">Loading shared proof...</p>
+          </div>
         </div>
       ) : null}
 
-      <div className="space-y-2">
+      {proof ? (
+        <div className="mb-5 overflow-hidden rounded-xl border border-emerald-300/10">
+          <div className="border-b border-emerald-300/10 bg-emerald-500/5 px-4 py-2.5">
+            <p className="text-[11px] font-medium text-neon-green">Proof Details</p>
+          </div>
+          <div className="divide-y divide-zinc-800/60 bg-black/20">
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-[11px] text-zinc-500">Owner</span>
+              <span className="text-[11px] text-zinc-200">{proof.owner_display}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-[11px] text-zinc-500">File</span>
+              <span className="text-[11px] text-zinc-200">{proof.filename}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-[11px] text-zinc-500">Verification ID</span>
+              <span className="max-w-[200px] truncate text-right font-mono text-[11px] text-zinc-200">{proof.verification_id}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-[11px] text-zinc-500">Algorithm</span>
+              <span className="text-[11px] text-zinc-200">{proof.pqc_algorithm}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-[11px] text-zinc-500">Created</span>
+              <span className="text-[11px] text-zinc-200">{new Date(proof.created_at).toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="space-y-3">
         <input
           ref={fileInputRef}
           type="file"
           className="hidden"
           onChange={(event) => setFileName(event.target.files?.[0]?.name ?? "")}
         />
-        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              className="btn-secondary text-[11px]"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={busy}
+            >
+              Choose File
+            </button>
+            <span className="text-[11px] text-zinc-500">{fileName || "No file selected"}</span>
+          </div>
           <button
             type="button"
-            className="btn-secondary w-full sm:w-auto"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={busy}
+            className="btn-primary text-[11px] sm:w-auto"
+            onClick={onVerify}
+            disabled={busy || !proof}
           >
-            Choose File
+            <Upload className="h-3.5 w-3.5" />
+            <span>{busy ? "Verifying..." : "Verify Against Proof"}</span>
           </button>
-          <span className="text-xs text-zinc-400">{fileName || "No file selected"}</span>
         </div>
-        <button
-          type="button"
-          className="btn-primary w-full sm:w-auto"
-          onClick={onVerify}
-          disabled={busy || !proof}
-        >
-          <Upload className="h-4 w-4" />
-          <span>{busy ? "Verifying..." : "Verify Against Shared Proof"}</span>
-        </button>
       </div>
 
       {result ? (
-        <div
-          className={`rounded-xl border p-3 text-xs ${
+        <div className={`mt-5 overflow-hidden rounded-xl border ${
+          result.status === "VERIFIED"
+            ? "border-emerald-400/20 bg-emerald-500/5"
+            : "border-red-400/20 bg-red-500/5"
+        }`}>
+          <div className={`flex items-center gap-2 border-b px-4 py-2.5 ${
             result.status === "VERIFIED"
-              ? "border-emerald-400/30 bg-emerald-500/10 text-neon-green"
-              : "border-red-400/30 bg-red-500/10 text-neon-red"
-          }`}
-        >
-          <p className="mb-1 inline-flex items-center gap-2 font-semibold">
+              ? "border-emerald-400/10 bg-emerald-500/10"
+              : "border-red-400/10 bg-red-500/10"
+          }`}>
             {result.status === "VERIFIED" ? (
-              <CheckCircle2 className="h-4 w-4" />
+              <CheckCircle2 className="h-4 w-4 text-neon-green" />
             ) : (
-              <ShieldX className="h-4 w-4" />
+              <ShieldX className="h-4 w-4 text-neon-red" />
             )}
-            {result.status}
-          </p>
-          <p>{result.detail}</p>
-          <p className="mt-2 break-all font-mono text-[11px]">
-            Expected: {result.expected_hash_sha3_512}
-          </p>
-          <p className="mt-1 break-all font-mono text-[11px]">
-            Submitted: {result.submitted_hash_sha3_512}
-          </p>
-          {result.auto_delete_at ? (
-            <p className="mt-1 text-[11px]">Auto-delete at: {new Date(result.auto_delete_at).toLocaleString()}</p>
-          ) : null}
+            <p className={`text-xs font-semibold ${result.status === "VERIFIED" ? "text-neon-green" : "text-neon-red"}`}>
+              {result.status}
+            </p>
+          </div>
+          <div className="space-y-2 px-4 py-3">
+            <p className="text-xs text-zinc-300">{result.detail}</p>
+            <div className="rounded-lg bg-black/30 p-2">
+              <p className="text-[11px] text-zinc-500">Expected hash</p>
+              <p className="mt-0.5 break-all font-mono text-[11px] text-zinc-300">{result.expected_hash_sha3_512}</p>
+            </div>
+            <div className="rounded-lg bg-black/30 p-2">
+              <p className="text-[11px] text-zinc-500">Submitted hash</p>
+              <p className="mt-0.5 break-all font-mono text-[11px] text-zinc-300">{result.submitted_hash_sha3_512}</p>
+            </div>
+            {result.auto_delete_at ? (
+              <p className="text-[11px] text-zinc-500">
+                Auto-delete at: {new Date(result.auto_delete_at).toLocaleString()}
+              </p>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
-      {error ? <p className="text-xs text-neon-red">{error}</p> : null}
+      {error ? (
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-red-400/20 bg-red-500/5 px-3 py-2">
+          <ShieldX className="h-3.5 w-3.5 shrink-0 text-neon-red" />
+          <p className="text-xs text-neon-red">{error}</p>
+        </div>
+      ) : null}
     </section>
   );
 }
